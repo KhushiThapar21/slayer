@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Communicate with friends</title>
+    <link rel="stylesheet" href="style2.css">
+  </head>
+  <body>
+    <h1>VIDEO CHAT</h1>
+    <hr>
+    <video id="local-video" autoplay></video>
+    <video id="remote-video" autoplay></video>
+    <br />
+    <textarea id="message" rows="3" cols="30"></textarea>
+    <button id="submit-button" type="submit">
+        <img class="send-icon" src="sendmessage.png" height =40px>
+      </button>
+    
+
+    <script>
+      const configuration = {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+        ],
+      };
+
+      const localVideo = document.getElementById("local-video");
+      const remoteVideo = document.getElementById("remote-video");
+      const messageInput = document.getElementById("message");
+      const sendButton = document.getElementById("send-button");
+
+      let localStream, remoteStream;
+      let localPeerConnection, remotePeerConnection;
+
+
+      async function startChat() {
+        try {
+    
+          localStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: true,
+          });
+
+          
+          localVideo.srcObject = localStream;
+
+          
+          sendButton.disabled = false;
+        } catch (error) {
+          console.error("Error accessing media devices:", error);
+        }
+      }
+
+    
+      function sendMessage() {
+        const message = messageInput.value;
+        const dataChannel = localPeerConnection.createDataChannel("chat");
+
+        dataChannel.onopen = () => {
+          console.log("Data channel opened");
+          dataChannel.send(message);
+        };
+
+        dataChannel.onmessage = (event) => {
+          console.log("Received message:", event.data);
+        };
+
+        localPeerConnection.ondatachannel = (event) => {
+          const receiveChannel = event.channel;
+
+          receiveChannel.onmessage = (event) => {
+            console.log("Received message:", event.data);
+          };
+        };
+      }
+
+      
+      async function setupPeerConnections() {
+        localPeerConnection = new RTCPeerConnection(configuration);
+        remotePeerConnection = new RTCPeerConnection(configuration);
+
+        
+        localStream.getTracks().forEach((track) => {
+          localPeerConnection.addTrack(track, localStream);
+        });
+
+        
+        const offer = await localPeerConnection.createOffer();
+        await localPeerConnection.setLocalDescription(offer);
+
+        
+        await remotePeerConnection.setRemoteDescription(
+          localPeerConnection.localDescription
+        );
+
+        // Create answer and set local description for remote peer connection
+        const answer = await remotePeerConnection.createAnswer();
+        await remotePeerConnection.setLocalDescription(answer);
+
+        // Set remote description for the local peer connection
+        await localPeerConnection.setRemoteDescription(
+          remotePeerConnection.localDescription
+        );
+
+        // Add remote stream to remote video element
+        remotePeerConnection.ontrack = (event) => {
+          if (!remoteStream) {
+            remoteStream = new MediaStream();
+            remoteVideo.srcObject = remoteStream;
+          }
+          remoteStream.addTrack(event.track, remoteStream);
+        };
+      }
+
+      // Initialize chat
+      async function initializeChat() {
+        await startChat();
+        await setupPeerConnections();
+      }
+
+      // Initialize chat when the page is loaded
+      document.addEventListener("DOMContentLoaded", initializeChat);
+
+      // Add event listener for send button click
+      sendButton.addEventListener("click", sendMessage);
+    </script>
+  </body>
+</html>
